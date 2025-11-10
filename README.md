@@ -1,115 +1,184 @@
-# Portal do Aluno - Backend API
+# Portal do Aluno - Backend
 
-Backend API para o Portal do Aluno SENAC, desenvolvido com Node.js, Express e MongoDB.
+Backend API para o Portal do Aluno SENAC construído com Express.js e MongoDB.
 
-## 🚀 Funcionalidades
+## 🚀 Tecnologias
 
-- **Autenticação**: Login e registro de estudantes
-- **Gestão de Usuários**: CRUD completo de estudantes
-- **Cursos**: Gerenciamento de disciplinas e matrículas
-- **Notas**: Sistema de avaliações e notas
-- **Frequência**: Controle de presença
-- **Notificações**: Sistema de alertas e mensagens
-- **JWT**: Autenticação segura com tokens
-
-## 🛠️ Tecnologias
-
-- **Node.js** - Runtime JavaScript
-- **Express** - Framework web
-- **MongoDB** - Banco de dados NoSQL
-- **Mongoose** - ODM para MongoDB
-- **JWT** - Autenticação
-- **bcryptjs** - Criptografia de senhas
-- **CORS** - Cross-origin resource sharing
+- Node.js
+- Express.js
+- MongoDB (Mongoose)
+- JWT (JsonWebToken)
+- Bcrypt
+- Multer (uploads)
+- Nodemailer (emails)
 
 ## 📋 Pré-requisitos
 
-- Node.js (versão 14 ou superior)
+- Node.js 18 ou superior
 - MongoDB Atlas ou MongoDB local
-- npm ou yarn
+- Conta no Vercel (para deploy)
 
 ## 🔧 Instalação
 
 1. Clone o repositório
 2. Instale as dependências:
-   ```bash
-   npm install
-   ```
+
+```bash
+npm install
+```
 
 3. Configure as variáveis de ambiente:
-   ```bash
-   # Copie o arquivo .env.example para .env
-   cp .env.example .env
-   
-   # Edite o arquivo .env com suas configurações
-   ```
 
-4. Configure as variáveis no arquivo `.env`:
-   ```
-   PORT=3001
-   DB_USER=seu_usuario_mongodb
-   DB_PASS=sua_senha_mongodb
-   DB_NAME=portal-aluno
-   JWT_SECRET=sua_chave_secreta
-   CORS_ORIGIN=http://localhost:3000
-   ```
+```bash
+cp config.env.example config.env
+```
 
-## 🚀 Executando
+4. Edite o arquivo `config.env` com suas configurações:
+
+```env
+PORT=3100
+NODE_ENV=development
+MONGODB_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/nome-do-banco?retryWrites=true&w=majority
+JWT_SECRET=sua-chave-secreta-super-forte-minimo-32-caracteres
+CORS_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
+```
+
+## 🏃 Executar
 
 ### Desenvolvimento
+
 ```bash
 npm run dev
 ```
 
 ### Produção
+
 ```bash
 npm start
 ```
 
-## 📚 Endpoints da API
+## 📚 API Endpoints
 
 ### Autenticação
 - `POST /api/auth/register` - Registrar novo usuário
-- `POST /api/auth/login` - Login do usuário
-- `GET /api/auth/me` - Obter perfil do usuário logado
+- `POST /api/auth/login` - Fazer login
+- `GET /api/auth/me` - Obter usuário atual
 
-### Teste
-- `GET /api/ping` - Teste de conectividade
-- `GET /` - Status da API
+### Cursos
+- `GET /api/courses` - Listar cursos
+- `POST /api/courses` - Criar curso (admin/teacher)
+- `GET /api/courses/:id` - Obter curso por ID
+- `PUT /api/courses/:id` - Atualizar curso (admin/teacher)
+- `DELETE /api/courses/:id` - Deletar curso (admin)
 
-## 🔐 Autenticação
+### Notas
+- `GET /api/grades` - Listar notas
+- `POST /api/grades` - Criar nota (teacher/admin)
+- `GET /api/grades/:id` - Obter nota por ID
+- `PUT /api/grades/:id` - Atualizar nota (teacher/admin)
+- `DELETE /api/grades/:id` - Deletar nota (admin)
 
-A API utiliza JWT (JSON Web Tokens) para autenticação. Para acessar rotas protegidas, inclua o token no header:
+### Aulas
+- `GET /api/lessons` - Listar aulas
+- `POST /api/lessons` - Criar aula (teacher/admin)
+- `GET /api/lessons/:id` - Obter aula por ID
+- `PUT /api/lessons/:id` - Atualizar aula (teacher/admin)
+- `DELETE /api/lessons/:id` - Deletar aula (admin)
+
+### Provas
+- `GET /api/exams` - Listar provas
+- `POST /api/exams` - Criar prova (teacher/admin)
+- `GET /api/exams/:id` - Obter prova por ID
+- `PUT /api/exams/:id` - Atualizar prova (teacher/admin)
+- `DELETE /api/exams/:id` - Deletar prova (admin)
+
+### Usuários
+- `GET /api/users` - Listar usuários (admin)
+- `GET /api/users/:id` - Obter usuário por ID
+- `PUT /api/users/:id` - Atualizar usuário
+- `DELETE /api/users/:id` - Deletar usuário (admin)
+
+### Dashboard
+- `GET /api/dashboard` - Obter dados do dashboard
+
+### Mensagens
+- `GET /api/messages` - Listar mensagens
+- `POST /api/messages` - Enviar mensagem
+- `GET /api/messages/:id` - Obter mensagem por ID
+
+### Calendário
+- `GET /api/calendar` - Listar eventos do calendário
+- `POST /api/calendar` - Criar evento (teacher/admin)
+- `GET /api/calendar/:id` - Obter evento por ID
+- `PUT /api/calendar/:id` - Atualizar evento (teacher/admin)
+- `DELETE /api/calendar/:id` - Deletar evento (admin)
+
+### Presença
+- `GET /api/attendance` - Listar presenças
+- `POST /api/attendance` - Registrar presença (teacher/admin)
+- `GET /api/attendance/:id` - Obter presença por ID
+
+### Certificados
+- `GET /api/certificates` - Listar certificados
+- `POST /api/certificates` - Criar certificado (admin)
+- `GET /api/certificates/:id` - Obter certificado por ID
+
+## 🔒 Autenticação
+
+A API usa JWT (JSON Web Tokens) para autenticação. Inclua o token no header:
 
 ```
-Authorization: Bearer <seu_token_jwt>
+Authorization: Bearer <token>
 ```
 
-## 📁 Estrutura do Projeto
+## 📝 Variáveis de Ambiente
 
-```
-├── controllers/     # Controladores da API
-├── middleware/      # Middlewares (auth, validação)
-├── models/          # Modelos do MongoDB
-├── routes/          # Rotas da API
-├── config/          # Configurações
-├── Uploads/         # Arquivos estáticos
-├── index.js         # Arquivo principal
-└── package.json     # Dependências
-```
+### Obrigatórias
 
-## 🤝 Contribuição
+- `MONGODB_URI` - URI de conexão do MongoDB
+- `JWT_SECRET` - Chave secreta para JWT (mínimo 32 caracteres em produção)
 
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
+### Opcionais
+
+- `PORT` - Porta do servidor (padrão: 3100)
+- `NODE_ENV` - Ambiente (development/production)
+- `CORS_ORIGIN` - Origens permitidas para CORS (separadas por vírgula)
+- `FRONTEND_URL` - URL do frontend (para links em emails)
+- `SMTP_HOST` - Host SMTP para emails
+- `SMTP_PORT` - Porta SMTP
+- `SMTP_SECURE` - Usar SSL/TLS
+- `SMTP_USER` - Usuário SMTP
+- `SMTP_PASS` - Senha SMTP
+
+## 🚀 Deploy no Vercel
+
+Veja o arquivo [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) para instruções detalhadas.
+
+### Resumo
+
+1. Configure as variáveis de ambiente no Vercel
+2. Faça o deploy via CLI ou Dashboard
+3. Configure o CORS para aceitar requisições do frontend
+
+## ⚠️ Limitações
+
+### Uploads de Arquivos
+
+No Vercel, a rota `/files` não funcionará porque as funções serverless são stateless. Para produção, use um serviço de storage externo:
+
+- AWS S3
+- Cloudinary
+- Firebase Storage
+- Google Cloud Storage
+- Vercel Blob Storage (plano Pro)
+
+## 📞 Suporte
+
+Para mais informações, consulte:
+- [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) - Guia de deploy
+- [README_DEPLOY.md](../README_DEPLOY.md) - Guia completo de deploy
 
 ## 📄 Licença
 
-Este projeto está sob a licença ISC.
-
----
-
-**Desenvolvido com ❤️ pela equipe SENAC**
+ISC

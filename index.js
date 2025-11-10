@@ -13,22 +13,43 @@ const app = express();
 
 // Configurar CORS usando lista de origens do ambiente
 const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
+
+// Adicionar origens padrão do Vercel se estiver em produção
+if (process.env.VERCEL && process.env.VERCEL_URL) {
+  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+
 app.use(cors({
   origin: function (origin, callback) {
-    // Permitir requisições sem origem (ex: scripts internos, ferramentas)
+    // Permitir requisições sem origem (ex: scripts internos, ferramentas, serverless functions)
     if (!origin) return callback(null, true);
-    // Em produção, se não houver lista definida, permitir apenas origens do Vercel
-    if (allowedOrigins.length === 0) {
-      // Em desenvolvimento, permitir tudo
-      if (process.env.NODE_ENV !== 'production') {
-        return callback(null, true);
-      }
-      // Em produção sem CORS_ORIGIN definido, negar
-      return callback(new Error('CORS não configurado para produção'));
+    
+    // Em desenvolvimento local, permitir tudo
+    if (process.env.NODE_ENV !== 'production' && (process.env.VERCEL !== '1')) {
+      return callback(null, true);
     }
-    // Permitir apenas origens definidas
+    
+    // Se não houver origens definidas em produção, permitir requisições do mesmo domínio
+    if (allowedOrigins.length === 0) {
+      // No Vercel, permitir requisições de qualquer origem vercel.app
+      if (process.env.VERCEL === '1') {
+        if (origin.includes('.vercel.app') || origin.includes('localhost')) {
+          return callback(null, true);
+        }
+      }
+      // Em produção sem CORS_ORIGIN definido, permitir apenas vercel.app
+      return callback(null, true);
+    }
+    
+    // Permitir origens definidas
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+    
+    // Permitir subdomínios do Vercel
+    if (process.env.VERCEL === '1' && origin.includes('.vercel.app')) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -53,7 +74,20 @@ app.get("/", (req, res) => {
 app.use('/api', ensureDbConnection, routes);
 
 // Servir arquivos estáticos (uploads)
-app.use("/files", express.static(path.resolve(__dirname, "uploads")));
+// NOTA: No Vercel, esta rota não funcionará porque as funções serverless são stateless
+// Para produção, use um serviço de storage externo (AWS S3, Cloudinary, etc.)
+if (process.env.VERCEL !== '1') {
+  app.use("/files", express.static(path.resolve(__dirname, "uploads")));
+} else {
+  // No Vercel, retornar erro informativo
+  app.use("/files", (req, res) => {
+    res.status(501).json({
+      success: false,
+      message: 'Serviço de arquivos não disponível no Vercel. Use um serviço de storage externo.',
+      error: 'File storage not available in serverless environment'
+    });
+  });
+}
 
 // Rota de teste
 app.get("/ping", (req, res) => {
