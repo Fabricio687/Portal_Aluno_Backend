@@ -14,41 +14,59 @@ const app = express();
 // Configurar CORS usando lista de origens do ambiente
 const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
 
+// URLs fixas do frontend em produção
+const FRONTEND_URLS = [
+  'https://projeto-integrador-914d.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
+// Adicionar URLs fixas do frontend
+FRONTEND_URLS.forEach(url => {
+  if (!allowedOrigins.includes(url)) {
+    allowedOrigins.push(url);
+  }
+});
+
 // Adicionar origens padrão do Vercel se estiver em produção
 if (process.env.VERCEL && process.env.VERCEL_URL) {
-  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+  const vercelUrl = `https://${process.env.VERCEL_URL}`;
+  if (!allowedOrigins.includes(vercelUrl)) {
+    allowedOrigins.push(vercelUrl);
+  }
 }
+
+console.log('🌐 CORS - Origens permitidas:', allowedOrigins);
 
 app.use(cors({
   origin: function (origin, callback) {
     // Permitir requisições sem origem (ex: scripts internos, ferramentas, serverless functions)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      return callback(null, true);
+    }
     
     // Em desenvolvimento local, permitir tudo
     if (process.env.NODE_ENV !== 'production' && (process.env.VERCEL !== '1')) {
       return callback(null, true);
     }
     
-    // Se não houver origens definidas em produção, permitir requisições do mesmo domínio
-    if (allowedOrigins.length === 0) {
-      // No Vercel, permitir requisições de qualquer origem vercel.app
-      if (process.env.VERCEL === '1') {
-        if (origin.includes('.vercel.app') || origin.includes('localhost')) {
-          return callback(null, true);
-        }
-      }
-      // Em produção sem CORS_ORIGIN definido, permitir apenas vercel.app
+    // Verificar se a origem está na lista de permitidas
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     
-    // Permitir origens definidas
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    
-    // Permitir subdomínios do Vercel
+    // No Vercel, permitir qualquer origem .vercel.app
     if (process.env.VERCEL === '1' && origin.includes('.vercel.app')) {
       return callback(null, true);
     }
     
+    // Permitir localhost em qualquer ambiente
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Log apenas se bloqueado (para debug)
+    console.warn('🌐 CORS - Origem bloqueada:', origin);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
