@@ -36,6 +36,10 @@ const examsRoutes = require('./Exams.routes');
 const coursesRoutes = require('./Courses.routes');
 const usersRoutes = require('./Users.routes');
 
+// Importar rota de busca
+const searchController = require('../controllers/Search.controller');
+const { protect } = require('../middleware/auth');
+
 // Definir rotas ativas
 router.use('/auth', authRoutes);
 router.use('/calendar', calendarRoutes);
@@ -50,5 +54,8 @@ router.use('/lessons', lessonsRoutes);
 router.use('/exams', examsRoutes);
 router.use('/courses', coursesRoutes);
 router.use('/users', usersRoutes);
+
+// Rota de busca global
+router.get('/search', protect, searchController.search);
 
 module.exports = router;

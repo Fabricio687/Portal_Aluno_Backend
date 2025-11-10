@@ -9,11 +9,12 @@ const attendanceSchema = new mongoose.Schema({
   course: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course',
-    required: [true, 'Curso é obrigatório']
+    required: false
   },
   courseName: {
     type: String,
-    required: [true, 'Nome do curso é obrigatório']
+    required: false,
+    default: ''
   },
   date: {
     type: Date,

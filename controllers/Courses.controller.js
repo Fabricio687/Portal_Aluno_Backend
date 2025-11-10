@@ -4,7 +4,20 @@ const User = require('../models/User');
 // Listar todos os cursos
 exports.getAll = async (req, res) => {
   try {
-    const courses = await Course.find()
+    const { search } = req.query;
+    let query = {};
+    
+    // Se houver busca, filtrar por nome ou código
+    if (search) {
+      query = {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { code: { $regex: search, $options: 'i' } }
+        ]
+      };
+    }
+    
+    const courses = await Course.find(query)
       .populate('students', 'name email registration')
       .sort({ name: 1 });
     
