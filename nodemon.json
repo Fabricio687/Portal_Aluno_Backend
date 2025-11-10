@@ -1,0 +1,19 @@
+{
+    "watch": [
+        "*.js",
+        "models/",
+        "controllers/",
+        "routes/",
+        "middleware/"
+    ],
+    "ext": "js,json",
+    "ignore": [
+        "node_modules/",
+        "scripts/"
+    ],
+    "exec": "node index.js",
+    "cwd": ".",
+    "env": {
+        "NODE_ENV": "development"
+    }
+}
