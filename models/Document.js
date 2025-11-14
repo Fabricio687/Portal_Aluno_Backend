@@ -28,7 +28,7 @@ const documentSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['declaração', 'atestado', 'histórico', 'boleto', 'contrato', 'outro'],
+    enum: ['declaração', 'atestado', 'histórico', 'boleto', 'contrato', 'curriculo', 'outro'],
     default: 'outro'
   },
   user: {

@@ -28,6 +28,7 @@ const messageRoutes = require('./Messages.routes');
 const dashboardRoutes = require('./Dashboard.routes');
 const certificateRoutes = require('./Certificate.routes');
 const attendanceRoutes = require('./Attendance.routes');
+const documentsRoutes = require('./Documents.routes');
 
 // Importar rotas de notas, aulas e provas
 const gradesRoutes = require('./Grades.routes');
@@ -47,6 +48,7 @@ router.use('/messages', messageRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/certificates', certificateRoutes);
 router.use('/attendance', attendanceRoutes);
+router.use('/documents', documentsRoutes);
 
 // Rotas de notas, aulas e provas
 router.use('/grades', gradesRoutes);
