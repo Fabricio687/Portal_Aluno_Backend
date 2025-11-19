@@ -16,3 +16,4 @@ router.get('/students/all', protect, DocumentController.getStudentDocuments);
 
 module.exports = router;
 
+

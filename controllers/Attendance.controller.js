@@ -199,8 +199,8 @@ exports.getCourseStudents = async (req, res) => {
       });
     }
     
-    // Verificar se o curso existe
-    const course = await Course.findById(courseId);
+    // Verificar se o curso existe e popular alunos
+    const course = await Course.findById(courseId).populate('students', 'name email registration role');
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -211,6 +211,14 @@ exports.getCourseStudents = async (req, res) => {
     // Se for professor, verificar se ele leciona este curso
     if (userRole === 'teacher') {
       const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Usuário não encontrado'
+        });
+      }
+      
+      // Verificar se o professor leciona este curso (comparar nome)
       if (course.professor !== user.name) {
         return res.status(403).json({
           success: false,
@@ -219,11 +227,28 @@ exports.getCourseStudents = async (req, res) => {
       }
     }
     
-    // Buscar alunos pelo nome do curso (campo course no User é string)
-    const students = await User.find({
-      course: course.name,
-      role: 'student'
-    }).select('name email registration').sort({ name: 1 });
+    // Buscar alunos que estão inscritos no curso (array students no Course)
+    let students = [];
+    if (course.students && course.students.length > 0) {
+      // Filtrar apenas alunos (pode ter outros tipos no array)
+      students = course.students
+        .filter(s => s.role === 'student')
+        .map(s => ({
+          _id: s._id,
+          name: s.name,
+          email: s.email,
+          registration: s.registration
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    // Se não encontrou alunos no array, tentar fallback
+    if (students.length === 0) {
+      students = await User.find({
+        course: course.name,
+        role: 'student'
+      }).select('name email registration').sort({ name: 1 }).lean();
+    }
     
     res.status(200).json({
       success: true,
@@ -237,10 +262,11 @@ exports.getCourseStudents = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Erro ao buscar alunos do curso:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar alunos do curso',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Erro interno do servidor'
     });
   }
 };
@@ -280,36 +306,109 @@ exports.createMultipleAttendances = async (req, res) => {
       }
     }
     
-    // Criar registros de presença
-    const attendanceRecords = await Promise.all(
-      attendances.map(async (att) => {
-        const student = await User.findById(att.studentId);
-        if (!student) {
-          throw new Error(`Aluno não encontrado: ${att.studentId}`);
+    // Validar dados de entrada
+    if (!attendances || !Array.isArray(attendances) || attendances.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lista de presenças vazia ou inválida'
+      });
+    }
+    
+    // Criar registros de presença com tratamento de erros individual
+    const attendanceRecords = [];
+    const errors = [];
+    
+    for (const att of attendances) {
+      try {
+        // Validar dados do registro
+        if (!att.studentId) {
+          errors.push(`Registro sem studentId`);
+          continue;
         }
         
-        return Attendance.create({
+        if (!att.status) {
+          errors.push(`Registro do aluno ${att.studentId} sem status`);
+          continue;
+        }
+        
+        // Verificar se o aluno existe
+        const student = await User.findById(att.studentId);
+        if (!student) {
+          errors.push(`Aluno não encontrado: ${att.studentId}`);
+          continue;
+        }
+        
+        // Normalizar data para comparação (apenas data, sem hora)
+        const attendanceDate = date ? new Date(date) : new Date();
+        const startOfDay = new Date(attendanceDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(attendanceDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        // Verificar se já existe registro para este aluno nesta data
+        const existingAttendance = await Attendance.findOne({
           student: att.studentId,
           course: courseId,
-          courseName: course.name,
-          date: date || new Date(),
-          status: att.status,
-          justification: att.justification || '',
-          professor: req.user.name || ''
+          date: {
+            $gte: startOfDay,
+            $lte: endOfDay
+          }
         });
-      })
-    );
+        
+        if (existingAttendance) {
+          // Atualizar registro existente ao invés de criar novo
+          existingAttendance.status = att.status;
+          existingAttendance.justification = att.justification || '';
+          await existingAttendance.save();
+          attendanceRecords.push(existingAttendance);
+        } else {
+          // Criar novo registro
+          const newAttendance = await Attendance.create({
+            student: att.studentId,
+            course: courseId,
+            courseName: course.name,
+            date: attendanceDate,
+            status: att.status,
+            justification: att.justification || '',
+            professor: req.user.name || course.professor || ''
+          });
+          attendanceRecords.push(newAttendance);
+        }
+      } catch (err) {
+        console.error(`Erro ao criar registro para aluno ${att.studentId}:`, err);
+        errors.push(`Erro ao processar aluno ${att.studentId}: ${err.message}`);
+      }
+    }
+    
+    // Se não conseguiu criar nenhum registro, retornar erro
+    if (attendanceRecords.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não foi possível criar nenhum registro de presença',
+        errors: errors
+      });
+    }
     
     // Popular os registros
-    await Attendance.populate(attendanceRecords, [
-      { path: 'student', select: 'name email registration' },
-      { path: 'course', select: 'name code' }
-    ]);
+    try {
+      await Attendance.populate(attendanceRecords, [
+        { path: 'student', select: 'name email registration' },
+        { path: 'course', select: 'name code' }
+      ]);
+    } catch (populateErr) {
+      console.error('Erro ao popular registros:', populateErr);
+      // Continuar mesmo se populate falhar
+    }
+    
+    const message = errors.length > 0
+      ? `${attendanceRecords.length} registro(s) criado(s), ${errors.length} erro(s)`
+      : `${attendanceRecords.length} registro(s) de presença criado(s) com sucesso`;
     
     res.status(201).json({
       success: true,
-      message: `${attendanceRecords.length} registro(s) de presença criado(s) com sucesso`,
-      data: attendanceRecords
+      message: message,
+      data: attendanceRecords,
+      errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
     res.status(500).json({

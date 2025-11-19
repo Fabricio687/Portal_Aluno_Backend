@@ -1,7 +1,32 @@
-require("dotenv").config();
+// Carregar variáveis de ambiente
+const path = require('path');
+const fs = require('fs');
+
+// Tentar carregar config.env de diferentes locais
+const configPaths = [
+  path.join(__dirname, 'config.env'),
+  path.join(process.cwd(), 'config.env'),
+  './config.env'
+];
+
+let configLoaded = false;
+for (const configPath of configPaths) {
+  if (fs.existsSync(configPath)) {
+    require('dotenv').config({ path: configPath });
+    console.log(`📄 Carregando config.env de: ${configPath}`);
+    configLoaded = true;
+    break;
+  }
+}
+
+if (!configLoaded) {
+  // Tentar carregar do .env também
+  require('dotenv').config();
+  console.log('⚠️  config.env não encontrado, usando .env ou variáveis de ambiente do sistema');
+}
+
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
 const mongoose = require("mongoose");
 
 const routes = require("./routes");
@@ -182,6 +207,33 @@ function validateEnvironment() {
 async function startDatabase() {
   const { DB_USER, DB_PASS, DB_NAME, MONGODB_URI } = process.env;
   
+  // Verificar se as variáveis estão configuradas corretamente
+  const hasValidConfig = MONGODB_URI || (DB_USER && DB_PASS && DB_NAME && 
+    !DB_USER.includes('seu_usuario') && !DB_PASS.includes('sua_senha'));
+  
+  if (!hasValidConfig) {
+    console.error('\n❌ MongoDB não configurado corretamente!');
+    console.error('\n📋 Status das variáveis:');
+    console.error(`   MONGODB_URI: ${MONGODB_URI ? '✅ definida' : '❌ não definida'}`);
+    if (DB_USER) {
+      console.error(`   DB_USER: ${DB_USER.includes('seu_usuario') ? '⚠️  VALOR DE EXEMPLO - Configure com valor real!' : '✅ definida'}`);
+    } else {
+      console.error(`   DB_USER: ❌ não definida`);
+    }
+    if (DB_PASS) {
+      console.error(`   DB_PASS: ${DB_PASS.includes('sua_senha') ? '⚠️  VALOR DE EXEMPLO - Configure com valor real!' : '✅ definida'}`);
+    } else {
+      console.error(`   DB_PASS: ❌ não definida`);
+    }
+    console.error(`   DB_NAME: ${DB_NAME ? '✅ definida' : '❌ não definida'}`);
+    console.error('\n💡 SOLUÇÃO:');
+    console.error('   1. Configure MONGODB_URI no arquivo config.env com sua URI do MongoDB Atlas');
+    console.error('   2. OU configure DB_USER, DB_PASS e DB_NAME com valores REAIS');
+    console.error('   3. Veja o arquivo GUIA_RAPIDO_CONFIGURACAO.md para instruções detalhadas');
+    console.error('\n⚠️  O servidor continuará rodando, mas as rotas da API retornarão erro 503 até o MongoDB ser configurado.\n');
+    return; // Não fazer exit, deixar servidor rodar
+  }
+  
   // Usar MONGODB_URI se fornecido, caso contrário construir a URI
   const uri = MONGODB_URI || `mongodb+srv://${DB_USER}:${DB_PASS}@cluster0.7hrgleb.mongodb.net/${DB_NAME}?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -192,8 +244,9 @@ async function startDatabase() {
       return;
     }
 
+    console.log("🔄 Conectando ao MongoDB Atlas...");
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000, // Timeout de 5 segundos
+      serverSelectionTimeoutMS: 10000, // Timeout de 10 segundos
       maxPoolSize: 10, // Manter até 10 conexões no pool
       minPoolSize: 2, // Manter pelo menos 2 conexões
     });

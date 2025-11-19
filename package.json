@@ -9,7 +9,14 @@
     "start": "node index.js",
     "seed": "node scripts/seed.js",
     "seed:courses": "node scripts/seedCourses.js",
-    "test:connection": "node scripts/test-connection.js"
+    "seed:complete": "node scripts/seedComplete.js",
+    "seed:full": "node scripts/seedFull.js",
+    "test:connection": "node scripts/test-connection.js",
+    "test:backend": "node scripts/test-backend-connection.js",
+    "test:complete": "node scripts/test-complete.js",
+    "validate:config": "node scripts/validate-config.js",
+    "verify:data": "node scripts/verify-data.js",
+    "diagnose": "node scripts/diagnose-all.js"
   },
   "keywords": [
     "portal-aluno",

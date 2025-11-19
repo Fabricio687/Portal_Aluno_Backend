@@ -11,70 +11,140 @@ exports.getStudentDashboard = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // Verificar se userId é válido
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de usuário inválido'
+      });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    // Buscar cursos onde o aluno está inscrito
+    const courses = await Course.find({ students: userObjectId }).select('_id name code').lean();
+    const courseIds = courses.map(c => c._id);
+
     // Estatísticas de presença (otimizado com agregação)
-    const attendanceStats = await Attendance.aggregate([
-      { $match: { student: new mongoose.Types.ObjectId(userId) } },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
+    let attendanceStats = [];
+    try {
+      attendanceStats = await Attendance.aggregate([
+        { $match: { student: userObjectId } },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
         }
-      }
-    ]);
+      ]);
+    } catch (err) {
+      console.error('Erro ao buscar estatísticas de presença:', err);
+      attendanceStats = [];
+    }
     
     const totalClasses = attendanceStats.reduce((sum, stat) => sum + stat.count, 0);
     const presentClasses = attendanceStats.find(s => s._id === 'present')?.count || 0;
     const attendanceRate = totalClasses > 0 ? (presentClasses / totalClasses) * 100 : 0;
 
-    // Buscar dados do usuário e curso em paralelo
-    const user = await User.findById(userId).select('course');
-    const userCourse = user?.course || '';
-    
-    const courseDoc = userCourse 
-      ? await Course.findOne({ name: userCourse }).select('_id')
-      : null;
-    const courseId = courseDoc?._id;
-
     // Próximas aulas e provas em paralelo
     const currentDate = new Date();
-    const [nextLessons, nextExams] = await Promise.all([
-      Lesson.find({
-        ...(courseId ? { course: courseId } : {}),
-        date: { $gte: currentDate }
-      })
-        .sort({ date: 1 })
-        .limit(5)
-        .populate('course', 'name code')
-        .lean(),
-      Exam.find({
-        ...(courseId ? { course: courseId } : {}),
-        date: { $gte: currentDate }
-      })
-        .sort({ date: 1 })
-        .limit(5)
-        .populate('course', 'name code')
-        .lean()
-    ]);
+    let nextLessons = [];
+    let nextExams = [];
 
-    // Notas recentes
-    const recentGrades = await Grade.find({ student: userId })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('course', 'name code')
-      .populate('exam', 'title');
+    try {
+      if (courseIds.length > 0) {
+        [nextLessons, nextExams] = await Promise.all([
+          Lesson.find({
+            course: { $in: courseIds },
+            date: { $gte: currentDate }
+          })
+            .sort({ date: 1 })
+            .limit(5)
+            .populate('course', 'name code')
+            .lean(),
+          Exam.find({
+            course: { $in: courseIds },
+            date: { $gte: currentDate }
+          })
+            .sort({ date: 1 })
+            .limit(5)
+            .populate('course', 'name code')
+            .lean()
+        ]);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar aulas e provas:', err);
+      nextLessons = [];
+      nextExams = [];
+    }
+
+    // Notas recentes (sem populate de exam que não existe)
+    let recentGrades = [];
+    try {
+      const gradesQuery = await Grade.find({ student: userObjectId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean();
+      
+      // Populate manual do course para cada nota (mais seguro)
+      recentGrades = await Promise.all(
+        gradesQuery.map(async (grade) => {
+          let courseInfo = null;
+          
+          // Tentar buscar curso se tiver ObjectId válido
+          if (grade.course) {
+            try {
+              const courseId = typeof grade.course === 'string' 
+                ? grade.course 
+                : grade.course.toString();
+              
+              if (mongoose.Types.ObjectId.isValid(courseId)) {
+                courseInfo = await Course.findById(courseId).select('name code').lean();
+              }
+            } catch (err) {
+              console.error('Erro ao buscar curso da nota:', err);
+            }
+          }
+          
+          return {
+            _id: grade._id,
+            student: grade.student,
+            course: courseInfo || { name: grade.courseName || 'Curso não encontrado', code: '' },
+            courseName: grade.courseName,
+            grade: grade.grade,
+            maxGrade: grade.maxGrade,
+            type: grade.type,
+            date: grade.date,
+            weight: grade.weight,
+            description: grade.description,
+            createdAt: grade.createdAt,
+            updatedAt: grade.updatedAt
+          };
+        })
+      );
+    } catch (err) {
+      console.error('Erro ao buscar notas:', err);
+      recentGrades = [];
+    }
 
     // Média geral (otimizado com agregação)
-    const gradeStats = await Grade.aggregate([
-      { $match: { student: new mongoose.Types.ObjectId(userId) } },
-      {
-        $group: {
-          _id: null,
-          average: { $avg: '$grade' },
-          count: { $sum: 1 }
+    let overallAverage = 0;
+    try {
+      const gradeStats = await Grade.aggregate([
+        { $match: { student: userObjectId } },
+        {
+          $group: {
+            _id: null,
+            average: { $avg: '$grade' },
+            count: { $sum: 1 }
+          }
         }
-      }
-    ]);
-    const overallAverage = gradeStats.length > 0 ? gradeStats[0].average : 0;
+      ]);
+      overallAverage = gradeStats.length > 0 && gradeStats[0].average ? gradeStats[0].average : 0;
+    } catch (err) {
+      console.error('Erro ao calcular média:', err);
+      overallAverage = 0;
+    }
 
     res.status(200).json({
       success: true,
@@ -82,19 +152,20 @@ exports.getStudentDashboard = async (req, res) => {
         attendanceStats: {
           totalClasses,
           presentClasses,
-          attendanceRate: attendanceRate.toFixed(2)
+          attendanceRate: parseFloat(attendanceRate.toFixed(2))
         },
-        nextLessons,
-        nextExams,
-        recentGrades,
-        overallAverage: overallAverage.toFixed(2)
+        nextLessons: nextLessons || [],
+        nextExams: nextExams || [],
+        recentGrades: recentGrades || [],
+        overallAverage: parseFloat(overallAverage.toFixed(2))
       }
     });
   } catch (error) {
+    console.error('Erro completo no dashboard do aluno:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar dados do dashboard',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Erro interno do servidor'
     });
   }
 };

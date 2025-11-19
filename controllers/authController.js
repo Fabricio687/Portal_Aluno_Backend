@@ -87,6 +87,7 @@ exports.login = async (req, res) => {
     delete userData.password;
 
     res.json({
+      success: true,
       message: 'Login realizado com sucesso',
       token,
       user: userData,
